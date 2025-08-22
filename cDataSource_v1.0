@@ -1,0 +1,80 @@
+'@Folder("Classes")
+Option Explicit
+
+'================================================================================================
+' Class:       cDataSource
+' Purpose:     Defines the structure of a source data sheet by mapping human-readable
+'              field names (e.g., "Affiliate") to their physical column index. This
+'              replaces hard-coded column constants, making the application more
+'              flexible and easier to maintain.
+' Version:     1.0
+' Author:      Ayush Goyal
+' Date:        08-Jul-2025
+'================================================================================================
+
+' --- Private Member Variables ---
+Private m_SheetName As String
+Private m_FieldMappings As Object ' Dictionary: Key = Field Name (String), Item = Column Index (Long)
+Private m_StartOfMonthsCol As Long
+
+' --- Public Properties ---
+Public Property Get sheetName() As String
+    sheetName = m_SheetName
+End Property
+
+Public Property Let sheetName(ByVal Value As String)
+    m_SheetName = Value
+End Property
+
+Public Property Get StartOfMonthsCol() As Long
+    StartOfMonthsCol = m_StartOfMonthsCol
+End Property
+
+Public Property Let StartOfMonthsCol(ByVal Value As Long)
+    m_StartOfMonthsCol = Value
+End Property
+
+' --- Constructor ---
+Private Sub Class_Initialize()
+    Set m_FieldMappings = CreateObject("Scripting.Dictionary")
+    m_FieldMappings.CompareMode = vbTextCompare ' Case-insensitive field names
+End Sub
+
+' --- Public Methods ---
+
+'---------------------------------------------------------------------------------
+' Procedure : MapField
+' Purpose   : Adds a new mapping between a field name and its column index.
+' @param   : FieldName As String - The logical name for the data column (e.g., "ForecastTier").
+' @param   : ColumnIndex As Long - The physical column number in the Excel sheet.
+'---------------------------------------------------------------------------------
+Public Sub MapField(ByVal FieldName As String, ByVal ColumnIndex As Long)
+    If Not m_FieldMappings.Exists(FieldName) Then
+        m_FieldMappings.Add FieldName, ColumnIndex
+    Else
+        m_FieldMappings.item(FieldName) = ColumnIndex ' Overwrite if exists
+    End If
+End Sub
+
+'---------------------------------------------------------------------------------
+' Procedure : GetCol
+' Purpose   : Retrieves the column index for a given field name. Includes error
+'             handling to provide a clear message if a mapping is missing.
+' @param   : FieldName As String - The logical name of the column to find.
+' @return  : Long - The corresponding column index. Returns 0 if not found.
+'---------------------------------------------------------------------------------
+Public Function GetCol(ByVal FieldName As String) As Long
+    If m_FieldMappings.Exists(FieldName) Then
+        GetCol = m_FieldMappings.item(FieldName)
+    Else
+        ' In a real-world scenario, you might raise an error here.
+        ' For this tool, returning 0 and letting downstream logic handle it is sufficient.
+        Debug.Print "Warning: Field '" & FieldName & "' not found in data source config for sheet '" & m_SheetName & "'."
+        GetCol = 0
+    End If
+End Function
+
+' --- Destructor ---
+Private Sub Class_Terminate()
+    Set m_FieldMappings = Nothing
+End Sub

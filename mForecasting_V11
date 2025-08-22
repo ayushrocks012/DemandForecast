@@ -1,0 +1,23 @@
+'@Folder("Forecasting")
+Option Explicit
+
+'================================================================================================
+' Module:      mForecasting
+' Purpose:     Main entry point for the forecasting application. Its only role is to
+'              create and run the main application controller object (cApp).
+' Version:     46.0
+' Author:      Ayush Goyal
+' Date:        22-Aug-2025
+'
+' Change Log:
+' V46.0:       - REFACTOR: Major architectural overhaul. All logic has been moved into the
+'                new cApp class. This module is now just a clean entry point.
+'================================================================================================
+
+Public Sub UpdateForecast()
+    ' All application logic is now encapsulated in the cApp class.
+    ' This sub simply creates an instance of the app and runs it.
+    Dim App As cApp
+    Set App = New cApp
+    App.Run
+End Sub

@@ -7,13 +7,14 @@ Option Explicit
 '              core components (DataManager, Engine, Reporter) and orchestrates the
 '              entire forecasting process from start to finish. This centralizes the
 '              application's logic and state.
-' Version:     1.1
+' Version:     1.2
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V1.1:        - REFACTOR: Replaced hard-coded data field strings in helper functions
-'                with the new public constants from mConfiguration.
+' V1.2:        - REFACTOR: Removed all general-purpose helper functions and updated the
+'                class to call them from the new, centralized mUtilities module.
+' V1.1:        - REFACTOR: Replaced hard-coded strings with constants.
 ' V1.0:        - Initial creation of the application controller class.
 '================================================================================================
 
@@ -62,6 +63,7 @@ Private Function InitializeRun() As Boolean
     Dim tCheckpoint As Double: tCheckpoint = Timer
     On Error GoTo Init_ErrorHandler
     
+    ' Call utility from mUtilities
     SetupApplication
     
     Set m_wbHost = ThisWorkbook
@@ -75,9 +77,11 @@ Private Function InitializeRun() As Boolean
     Application.DisplayAlerts = True
     
     Set m_wsLog = m_wbHost.Sheets.Add(After:=m_wbHost.Sheets(m_wbHost.Sheets.Count))
+    ' Call utility from mUtilities
     InitializeLogSheet m_wsLog
     
-    LogPerformance tCheckpoint, "Initialize Environment"
+    ' Call utility from mUtilities
+    LogPerformance m_wsLog, tCheckpoint, "Initialize Environment"
     InitializeRun = True
     Exit Function
 
@@ -105,7 +109,7 @@ Private Sub ProcessAllAffiliates()
     
     lngTotal = m_DataManager.Affiliates.Count
     If lngTotal = 0 Then
-        WriteToLog ltWarning, "ProcessAllAffiliates", "No affiliates found in Demand Forecast sheet."
+        WriteToLog m_wsLog, ltWarning, "ProcessAllAffiliates", "No affiliates found in Demand Forecast sheet."
         Exit Sub
     End If
     
@@ -118,20 +122,22 @@ Private Sub ProcessAllAffiliates()
         Application.StatusBar = "Calculating Forecast for " & strAffiliate & " (" & lngCounter & " of " & lngTotal & ")..."
         DoEvents
         
-        WriteToLog ltInfo, "ProcessAllAffiliates", "Starting Calculations for: " & strAffiliate
+        WriteToLog m_wsLog, ltInfo, "ProcessAllAffiliates", "Starting Calculations for: " & strAffiliate
         
         Dim affiliateItems As Object
+        ' Call utility from mUtilities
         Set affiliateItems = GetItemsForAffiliate(strAffiliate, m_DataManager.ForecastItems)
 
         InitializeForecastValues affiliateItems
         ComputeBaseForecasts strAffiliate, affiliateItems, m_DataManager, m_CalcEngine
         ApplySuccessorAdjustments affiliateItems
         
-        WriteToLog ltInfo, "ProcessAllAffiliates", "Finished Calculations for: " & strAffiliate
+        WriteToLog m_wsLog, ltInfo, "ProcessAllAffiliates", "Finished Calculations for: " & strAffiliate
         
         ' --- STAGE 2: GENERATE A SEPARATE REPORT FOR EACH CUSTOMER ---
-        WriteToLog ltInfo, "ProcessAllAffiliates", "Starting Reporting for: " & strAffiliate
+        WriteToLog m_wsLog, ltInfo, "ProcessAllAffiliates", "Starting Reporting for: " & strAffiliate
         Dim dictCustomers As Object
+        ' Call utility from mUtilities
         Set dictCustomers = GetUniqueCustomersForAffiliate(strAffiliate, m_DataManager.DemandDataArray)
         
         Dim varCustomer As Variant, custCounter As Long, custTotal As Long
@@ -146,18 +152,18 @@ Private Sub ProcessAllAffiliates()
             m_Reporter.GenerateCustomerReport strAffiliate, CStr(varCustomer)
         Next varCustomer
         
-        WriteToLog ltInfo, "ProcessAllAffiliates", "Finished Reporting for: " & strAffiliate
+        WriteToLog m_wsLog, ltInfo, "ProcessAllAffiliates", "Finished Reporting for: " & strAffiliate
         
         GoTo Next_Affiliate
 Affiliate_ErrorHandler:
         m_lngWarningCount = m_lngWarningCount + 1
-        WriteToLog ltError, "ProcessAllAffiliates", "Critical error processing affiliate '" & strAffiliate & "'.", Err.Number, Err.Description
+        WriteToLog m_wsLog, ltError, "ProcessAllAffiliates", "Critical error processing affiliate '" & strAffiliate & "'.", Err.Number, Err.Description
         Resume Next_Affiliate
 Next_Affiliate:
         On Error GoTo 0
     Next varAffiliate
     
-    LogPerformance tCheckpoint, "Process All Affiliates"
+    LogPerformance m_wsLog, tCheckpoint, "Process All Affiliates"
 End Sub
 
 Private Sub FinalizeRun(ByVal tStart As Double)
@@ -203,7 +209,7 @@ Private Sub ComputeBaseForecasts(ByVal strAffiliate As String, ByVal dictAffilia
     For Each itemKey In dictAffiliateItems.Keys
         Set forecastItem = dictAffiliateItems.item(itemKey)
         
-        If DEBUG_MODE Then WriteToLog ltInfo, "ComputeBaseForecasts", "Processing Item: " & forecastItem.DebugSummary()
+        If DEBUG_MODE Then WriteToLog m_wsLog, ltInfo, "ComputeBaseForecasts", "Processing Item: " & forecastItem.DebugSummary()
         
         For Each varCustomer In dictCustomers.Keys
             For Each keyFigure In dataManager.KeyFigures.Keys
@@ -222,81 +228,9 @@ Private Sub ApplySuccessorAdjustments(ByVal dictAffiliateItems As Object)
     End If
 End Sub
 
-
 '================================================================================================
-' 4. UTILITY & HELPER FUNCTIONS
+' 4. CLASS DESTRUCTOR
 '================================================================================================
-
-Private Function GetItemsForAffiliate(ByVal strAffiliate As String, ByVal allItems As Object) As Object
-    Dim dict As Object: Set dict = CreateObject("Scripting.Dictionary")
-    Dim itemKey As Variant, item As cForecastItem
-    
-    For Each itemKey In allItems.Keys
-        Set item = allItems.item(itemKey)
-        If item.Affiliate = strAffiliate Then
-            dict.Add itemKey, item
-        End If
-    Next itemKey
-    
-    Set GetItemsForAffiliate = dict
-End Function
-
-Private Function GetUniqueCustomersForAffiliate(ByVal strAffiliate As String, ByVal arrDemand As Variant) As Object
-    Set GetUniqueCustomersForAffiliate = CreateObject("Scripting.Dictionary")
-    Dim rowIndex As Long
-    Dim colAffiliate As Long: colAffiliate = g_dsDemand.GetCol(FIELD_AFFILIATE)
-    Dim colCustomer As Long: colCustomer = g_dsDemand.GetCol(FIELD_CUSTOMER)
-    
-    For rowIndex = 2 To UBound(arrDemand, 1)
-        If arrDemand(rowIndex, colAffiliate) = strAffiliate Then
-            Dim strCustomer As String: strCustomer = arrDemand(rowIndex, colCustomer)
-            If Not GetUniqueCustomersForAffiliate.Exists(strCustomer) Then
-                GetUniqueCustomersForAffiliate.Add strCustomer, 1
-            End If
-        End If
-    Next rowIndex
-End Function
-
-Private Sub SetupApplication()
-    Application.ScreenUpdating = False
-    Application.DisplayAlerts = False
-    Application.Calculation = xlCalculationManual
-    Application.EnableEvents = False
-End Sub
-
-Private Sub InitializeLogSheet(ByVal ws As Worksheet)
-    ws.Name = SHEET_LOG
-    With ws.Range("A1:E1")
-        .Value = Array("Timestamp", "Type", "Procedure", "Message", "Context / Error")
-        .Font.Bold = True
-    End With
-    ws.Columns("A:E").AutoFit
-End Sub
-
-Private Sub WriteToLog(ByVal logType As logType, ByVal procedureName As String, ByVal message As String, Optional ByVal errNumber As Long = 0, Optional ByVal errContext As String = "")
-    If m_wsLog Is Nothing Then Exit Sub
-    Dim nextRow As Long: nextRow = m_wsLog.Cells(m_wsLog.Rows.Count, "A").End(xlUp).Row + 1
-    With m_wsLog.Rows(nextRow)
-        .Cells(1).Value = Now(): .Cells(2).Value = GetLogTypeString(logType)
-        .Cells(3).Value = procedureName: .Cells(4).Value = message
-        If errNumber <> 0 Then .Cells(5).Value = "Err " & errNumber & ": " & errContext Else .Cells(5).Value = errContext
-    End With
-End Sub
-
-Private Sub LogPerformance(ByRef tCheckpoint As Double, ByVal strStageName As String)
-    WriteToLog ltProfile, strStageName, "Stage completed in " & Format$(Timer - tCheckpoint, "#,##0.00") & "s"
-    tCheckpoint = Timer
-End Sub
-
-Private Function GetLogTypeString(ByVal logType As logType) As String
-    Select Case logType
-        Case ltInfo: GetLogTypeString = "Info"
-        Case ltWarning: GetLogTypeString = "Warning"
-        Case ltError: GetLogTypeString = "Error"
-        Case ltFatal: GetLogTypeString = "FATAL"
-        Case ltProfile: GetLogTypeString = "Profile"
-    End Select
-End Function
 
 Private Sub Class_Terminate()
     ' Clean up all object references
@@ -306,3 +240,4 @@ Private Sub Class_Terminate()
     Set m_wbHost = Nothing
     Set m_wsLog = Nothing
 End Sub
+

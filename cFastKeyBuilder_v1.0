@@ -1,0 +1,70 @@
+'@Folder("Classes")
+Option Explicit
+
+'================================================================================================
+' Class:       cFastKeyBuilder
+' Purpose:     Provides a high-performance, lightweight alternative to cDimensionKey for
+'              use in performance-critical loops. It builds a consistent, sorted,
+'              delimited key from string parts without the overhead of creating
+'              Dictionary or ArrayList objects.
+' Version:     1.0
+' Author:      Ayush Goyal
+' Date:        08-Jul-2025
+'================================================================================================
+
+' --- Private Member Variables ---
+Private m_parts(0 To 4) As String ' Fixed-size array for performance
+Private m_count As Long
+Private Const SEPARATOR As String = "|"
+
+' --- Public Methods ---
+
+'---------------------------------------------------------------------------------
+' Procedure : Add
+' Purpose   : Adds a new string part to the key.
+'---------------------------------------------------------------------------------
+Public Sub Add(ByVal Value As String)
+    If m_count > UBound(m_parts) Then Exit Sub ' Safety check
+    m_parts(m_count) = Value
+    m_count = m_count + 1
+End Sub
+
+'---------------------------------------------------------------------------------
+' Procedure : ToString
+' Purpose   : Generates the final, sorted key string. It sorts the internal
+'             array and then joins the parts.
+' @return  : String - The generated composite key string.
+'---------------------------------------------------------------------------------
+Public Function ToString() As String
+    If m_count = 0 Then Exit Function
+    
+    ' Use a simple, fast bubble sort for the small array
+    Dim i As Long, j As Long
+    Dim temp As String
+    For i = 0 To m_count - 2
+        For j = i + 1 To m_count - 1
+            If m_parts(i) > m_parts(j) Then
+                temp = m_parts(j)
+                m_parts(j) = m_parts(i)
+                m_parts(i) = temp
+            End If
+        Next j
+    Next i
+    
+    ' Manually join the sorted parts for maximum speed
+    Select Case m_count
+        Case 1
+            ToString = m_parts(0)
+        Case 2
+            ToString = m_parts(0) & SEPARATOR & m_parts(1)
+        Case 3
+            ToString = m_parts(0) & SEPARATOR & m_parts(1) & SEPARATOR & m_parts(2)
+        Case 4
+            ToString = m_parts(0) & SEPARATOR & m_parts(1) & SEPARATOR & m_parts(2) & SEPARATOR & m_parts(3)
+        Case 5
+            ToString = m_parts(0) & SEPARATOR & m_parts(1) & SEPARATOR & m_parts(2) & SEPARATOR & m_parts(3) & SEPARATOR & m_parts(4)
+    End Select
+    
+    ' Reset for potential reuse of the object
+    m_count = 0
+End Function

@@ -6,16 +6,15 @@ Option Explicit
 ' Purpose:     Encapsulates all data loading, validation, and caching logic. This class
 '              acts as the single source of truth for all data required by the forecasting
 '              engine, abstracting away the details of reading from Excel sheets.
-' Version:     2.2
+' Version:     2.3
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V2.2:        - BUGFIX: Qualified the 'logType' enum with its module name
-'                (mConfiguration.logType) in procedure signatures to resolve compile errors.
-' V2.1:        - REFACTOR: Updated all data source access to use the new encapsulated
-'                properties (e.g., ProductStatusSource) from the mConfiguration module.
-' V2.0:        - REFACTOR: Integrated "Customer" dimension into all relevant cache keys.
+' V2.3:        - BUGFIX: Reverted the 'logType' enum type back to its unqualified
+'                form, as the definition has been moved to the new global 'mTypes' module.
+' V2.2:        - BUGFIX: Attempted to qualify the 'logType' enum (did not work).
+' V2.1:        - REFACTOR: Updated data source access to use encapsulated properties.
 '================================================================================================
 
 ' --- Private Member Variables ---
@@ -320,8 +319,8 @@ Private Function GetUniqueValues(arrData As Variant, ByVal lngCol As Long) As Ob
     Set GetUniqueValues = dict
 End Function
 
-' THE FIX IS HERE: The parameter type is now explicitly qualified.
-Private Sub WriteToLog(ByVal logType As mConfiguration.logType, ByVal procedureName As String, ByVal message As String, Optional ByVal errNumber As Long = 0, Optional ByVal errContext As String = "")
+' THE FIX IS HERE: The parameter type is now the simple, unqualified 'logType'.
+Private Sub WriteToLog(ByVal logType As logType, ByVal procedureName As String, ByVal message As String, Optional ByVal errNumber As Long = 0, Optional ByVal errContext As String = "")
     If m_wsLog Is Nothing Then Exit Sub
     Dim nextRow As Long: nextRow = m_wsLog.Cells(m_wsLog.Rows.Count, "A").End(xlUp).Row + 1
     With m_wsLog.Rows(nextRow)
@@ -336,8 +335,8 @@ Private Sub LogPerformance(ByRef tCheckpoint As Double, ByVal strStageName As St
     tCheckpoint = Timer
 End Sub
 
-' THE FIX IS HERE: The parameter type is now explicitly qualified.
-Private Function GetLogTypeString(ByVal logType As mConfiguration.logType) As String
+' THE FIX IS HERE: The parameter type is now the simple, unqualified 'logType'.
+Private Function GetLogTypeString(ByVal logType As logType) As String
     Select Case logType
         Case ltInfo: GetLogTypeString = "Info"
         Case ltWarning: GetLogTypeString = "Warning"

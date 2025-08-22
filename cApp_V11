@@ -7,18 +7,17 @@ Option Explicit
 '              core components (DataManager, Engine, Reporter) and orchestrates the
 '              entire forecasting process from start to finish. This centralizes the
 '              application's logic and state.
-' Version:     1.4
+' Version:     1.5
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V1.4:        - REFACTOR: Removed the now-redundant configuration lines for the
-'                cCalculationEngine, completing the cleanup from the Rubberduck
-'                code inspection.
+' V1.5:        - REFACTOR: Updated the class to use the new read-only properties for
+'                data source objects (e.g., g_dsDemand -> dsDemand) to respect the
+'                newly implemented encapsulation in mConfiguration.
+' V1.4:        - REFACTOR: Removed redundant configuration for cCalculationEngine.
 ' V1.3:        - BUGFIX: Removed "Me" keyword to resolve compile error.
 ' V1.2:        - REFACTOR: Removed helper functions to call them from mUtilities.
-' V1.1:        - REFACTOR: Replaced hard-coded strings with constants.
-' V1.0:        - Initial creation of the application controller class.
 '================================================================================================
 
 ' --- Private Core Component Objects ---
@@ -100,8 +99,8 @@ Private Sub ProcessAllAffiliates()
     
     ' --- Initialize Core Components ---
     Set m_CalcEngine = New cCalculationEngine
-    ' REFACTOR: The engine no longer needs explicit dimension configuration.
-    m_CalcEngine.Init m_DataManager.DemandDataArray, g_dsDemand.StartOfMonthsCol
+    ' REFACTOR: Use the new dsDemand property instead of the old global variable
+    m_CalcEngine.Init m_DataManager.DemandDataArray, dsDemand.StartOfMonthsCol
     
     Set m_Reporter = New cReportGenerator
     m_Reporter.Init m_DataManager, m_wsLog, m_wbHost.Path

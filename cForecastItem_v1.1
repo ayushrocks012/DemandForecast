@@ -6,18 +6,15 @@ Option Explicit
 ' Purpose:     Represents a single, generic item to be forecasted. This class is
 '              primarily a data container for an item's properties and its
 '              calculated forecast values.
-' Version:     3.2
+' Version:     3.3
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V3.2:        - BUGFIX: Qualified the 'ProductStatus' enum with its module name
-'                (mConfiguration.ProductStatus) to resolve a "User-defined type not defined"
-'                compile error caused by VBA's compilation order.
-' V3.1:        - REFACTOR: Removed the unused 'Dimensions' property which was linked to the
-'                obsolete cDimensionKey class.
-' V3.0:        - REFACTOR: Updated HandlePhaseOutInit and GetForecastMultiplier methods to
-'                use the new explicit product statuses (psPhaseOut, psPhaseIn, etc.)
+' V3.3:        - BUGFIX: Reverted the 'ProductStatus' enum type back to its unqualified
+'                form, as the definition has been moved to the new global 'mTypes' module.
+' V3.2:        - BUGFIX: Attempted to qualify the 'ProductStatus' enum (did not work).
+' V3.1:        - REFACTOR: Removed the unused 'Dimensions' property.
 '================================================================================================
 
 ' --- Private Member Variables ---
@@ -44,8 +41,8 @@ Public Property Get Description() As String: Description = GetProp("Description"
 '@Ignore UnusedMember
 Public Property Get ISD() As String: ISD = GetProp("ISD"): End Property
 
-' THE FIX IS HERE: The return type is now explicitly qualified with the module name.
-Public Property Get Status() As mConfiguration.ProductStatus: Status = GetProp("Status"): End Property
+' This now correctly refers to the ProductStatus Enum in the mTypes module.
+Public Property Get Status() As ProductStatus: Status = GetProp("Status"): End Property
 
 Public Property Get PhaseOutDate() As Variant
     Dim val As Variant

@@ -6,13 +6,14 @@ Option Explicit
 ' Purpose:     This module defines all global constants and utility functions for the project.
 '              It acts as a central control panel for sheet names, column positions,
 '              and business logic enumerations.
-' Version:     40.3
+' Version:     40.4
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V40.3:       - REFACTOR: Moved all Enum definitions to a new, dedicated 'mTypes' module
-'                to provide a robust, permanent fix for the compile error.
+' V40.4:       - REFACTOR: Removed unused 'CALC_..._DIM' constants as flagged by Rubberduck.
+'                These were made obsolete by the refactoring of cCalculationEngine.
+' V40.3:       - REFACTOR: Moved all Enum definitions to a new, dedicated 'mTypes' module.
 ' V40.2:       - BUGFIX: Attempted to qualify Enums (did not work).
 ' V40.1:       - REFACTOR: Encapsulated global data source variables.
 '================================================================================================
@@ -25,13 +26,6 @@ Public Const SHEET_STATUS As String = "Product Status"
 Public Const SHEET_DEMAND As String = "Demand Forecast"
 Public Const SHEET_HISTORY As String = "Historical Sales"
 Public Const SHEET_LOG As String = "Log"
-
-' --- CALCULATION ENGINE CONFIGURATION ---
-Public Const CALC_AFFILIATE_DIM As String = "Affiliate"
-Public Const CALC_CUSTOMER_DIM As String = "Customer"
-Public Const CALC_TOTAL_LEVEL_DIM As String = "ForecastTier"
-Public Const CALC_SHARE_LEVEL_DIM As String = "ForecastSubTier"
-Public Const CALC_KEY_FIGURE_DIM As String = "KeyFigure"
 
 ' --- GLOBAL CONFIGURATION OBJECTS (ENCAPSULATED) ---
 Private p_dsProductStatus As cDataSource

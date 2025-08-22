@@ -6,15 +6,15 @@ Option Explicit
 ' Purpose:     This module defines all global constants and utility functions for the project.
 '              It acts as a central control panel for sheet names, column positions,
 '              and business logic enumerations.
-' Version:     41.0
+' Version:     42.0
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V41.0:       - REFACTOR: Replaced all hard-coded data field strings with public constants
-'                (e.g., "Affiliate" -> FIELD_AFFILIATE) for improved maintainability
-'                and to prevent typo-related errors.
-' V40.0:       - REFACTOR: Added "Customer" dimension and updated status logic.
+' V42.0:       - REFACTOR: Fixed encapsulation by making global data source objects private
+'                and exposing them via read-only properties, as per Rubberduck suggestion.
+'              - REFACTOR: Removed unused CALC_... constants.
+' V41.0:       - REFACTOR: Replaced hard-coded strings with public constants.
 '================================================================================================
 
 ' --- DEBUGGING & LOGGING FLAGS ---
@@ -41,20 +41,24 @@ Public Const FIELD_PHASEOUTPERCENT As String = "PhaseOutPercent"
 Public Const FIELD_SUPERSEDEDBY As String = "SupersededBy"
 Public Const FIELD_KEYFIGURE As String = "KeyFigure"
 
-' --- CALCULATION ENGINE CONFIGURATION ---
-Public Const CALC_AFFILIATE_DIM As String = FIELD_AFFILIATE
-Public Const CALC_CUSTOMER_DIM As String = FIELD_CUSTOMER
-Public Const CALC_TOTAL_LEVEL_DIM As String = "ForecastTier"
-Public Const CALC_SHARE_LEVEL_DIM As String = "ForecastSubTier"
-Public Const CALC_KEY_FIGURE_DIM As String = FIELD_KEYFIGURE
-
-' --- GLOBAL CONFIGURATION OBJECTS ---
-Public g_dsProductStatus As cDataSource
-Public g_dsHistory As cDataSource
-Public g_dsDemand As cDataSource
+' --- PRIVATE GLOBAL CONFIGURATION OBJECTS ---
+Private p_dsProductStatus As cDataSource
+Private p_dsHistory As cDataSource
+Private p_dsDemand As cDataSource
 Private pTierReportCols As Collection
 Private pSummaryReportCols As Collection
 Private dictStatusMap As Object
+
+' --- PUBLIC PROPERTIES FOR CONFIGURATION OBJECTS (Read-Only) ---
+Public Property Get dsProductStatus() As cDataSource
+    Set dsProductStatus = p_dsProductStatus
+End Property
+Public Property Get dsHistory() As cDataSource
+    Set dsHistory = p_dsHistory
+End Property
+Public Property Get dsDemand() As cDataSource
+    Set dsDemand = p_dsDemand
+End Property
 
 ' --- ENUMERATIONS ---
 Public Enum ProductStatus
@@ -90,9 +94,9 @@ End Sub
 Public Sub CleanupAllConfigs(Optional ByVal dummy As Boolean)
     Set pTierReportCols = Nothing
     Set pSummaryReportCols = Nothing
-    Set g_dsProductStatus = Nothing
-    Set g_dsHistory = Nothing
-    Set g_dsDemand = Nothing
+    Set p_dsProductStatus = Nothing
+    Set p_dsHistory = Nothing
+    Set p_dsDemand = Nothing
     Set dictStatusMap = Nothing
 End Sub
 
@@ -175,8 +179,8 @@ End Sub
 
 ' --- Data Source Configuration ---
 Private Sub InitializeProductStatusSource()
-    Set g_dsProductStatus = New cDataSource
-    With g_dsProductStatus
+    Set p_dsProductStatus = New cDataSource
+    With p_dsProductStatus
         .sheetName = SHEET_STATUS
         .MapField FIELD_AFFILIATE, 1
         .MapField FIELD_TIER, 2
@@ -192,8 +196,8 @@ Private Sub InitializeProductStatusSource()
 End Sub
 
 Private Sub InitializeHistorySource()
-    Set g_dsHistory = New cDataSource
-    With g_dsHistory
+    Set p_dsHistory = New cDataSource
+    With p_dsHistory
         .sheetName = SHEET_HISTORY
         .MapField FIELD_AFFILIATE, 1
         .MapField FIELD_TIER, 2
@@ -206,8 +210,8 @@ Private Sub InitializeHistorySource()
 End Sub
 
 Private Sub InitializeDemandSource()
-    Set g_dsDemand = New cDataSource
-    With g_dsDemand
+    Set p_dsDemand = New cDataSource
+    With p_dsDemand
         .sheetName = SHEET_DEMAND
         .MapField FIELD_AFFILIATE, 1
         .MapField FIELD_CUSTOMER, 2

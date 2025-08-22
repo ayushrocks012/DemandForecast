@@ -6,21 +6,16 @@ Option Explicit
 ' Purpose:     Encapsulates all data loading, validation, and caching logic. This class
 '              acts as the single source of truth for all data required by the forecasting
 '              engine, abstracting away the details of reading from Excel sheets.
-' Version:     2.1
+' Version:     2.2
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
+' V2.2:        - BUGFIX: Qualified the 'logType' enum with its module name
+'                (mConfiguration.logType) in procedure signatures to resolve compile errors.
 ' V2.1:        - REFACTOR: Updated all data source access to use the new encapsulated
-'                properties (e.g., ProductStatusSource) from the mConfiguration module
-'                instead of direct global variables.
-' V2.0:        - REFACTOR: Integrated "Customer" dimension into all relevant cache keys
-'                (History Cache, Historical Sum Cache, Demand Cache).
-'              - BUGFIX: Added robust date parsing for historical data headers to handle
-'                text/general formats from Power Query.
-'              - FEATURE: Added logic to filter out items with "Not Applicable" status
-'                during the initial data load.
-' V1.2:        - PERFORMANCE: Replaced cDimensionKey with direct string concatenation.
+'                properties (e.g., ProductStatusSource) from the mConfiguration module.
+' V2.0:        - REFACTOR: Integrated "Customer" dimension into all relevant cache keys.
 '================================================================================================
 
 ' --- Private Member Variables ---
@@ -73,7 +68,6 @@ Public Function LoadAndProcessData() As Boolean
     Set m_dictForecastItemMap = BuildForecastItemMap(m_arrStatusData)
     ValidateSuccessorLinks
     
-    ' Use the new accessor function from mConfiguration instead of the old global variable
     Set m_dictAffiliates = GetUniqueValues(m_arrDemandData, DemandSource.GetCol("Affiliate"))
     Set m_dictKeyFigures = GetUniqueValues(m_arrDemandData, DemandSource.GetCol("KeyFigure"))
     
@@ -98,7 +92,6 @@ Private Function LoadAndValidateSourceSheets() As Boolean
     
     Application.StatusBar = "Loading and validating source data..."
     
-    ' Use the new accessor function from mConfiguration instead of the old global variable
     If Not SheetExists(ProductStatusSource.sheetName) Then Err.Raise 515, , "Required sheet '" & ProductStatusSource.sheetName & "' not found."
     If Not SheetExists(HistorySource.sheetName) Then Err.Raise 516, , "Required sheet '" & HistorySource.sheetName & "' not found."
     If Not SheetExists(DemandSource.sheetName) Then Err.Raise 517, , "Required sheet '" & DemandSource.sheetName & "' not found."
@@ -124,10 +117,7 @@ Private Function BuildForecastItemMap(ByVal arrStatus As Variant) As Object
     Dim rowIndex As Long, obj As cForecastItem, strKey As String
     
     For rowIndex = 2 To UBound(arrStatus, 1)
-        ' NEW: Check status and skip "Not Applicable" items before processing
-        ' Use the new accessor function from mConfiguration instead of the old global variable
         If GetStatusEnum(arrStatus(rowIndex, ProductStatusSource.GetCol("Status"))) <> psNotApplicable Then
-            ' Key is "Affiliate|ISD" - this remains unchanged as it defines a unique product
             strKey = arrStatus(rowIndex, ProductStatusSource.GetCol("Affiliate")) & "|" & arrStatus(rowIndex, ProductStatusSource.GetCol("ISD"))
             
             If Not dictMap.Exists(strKey) Then
@@ -213,9 +203,6 @@ Private Sub BuildHistoryCache()
     Dim dteMonth As Date
     
     For r = 2 To UBound(m_arrHistoryData, 1)
-        ' UPDATED: Key now includes Customer.
-        ' Sorted alphabetically: "Affiliate", "Customer", "KeyFigure", "LocalItemNbr"
-        ' Use the new accessor function from mConfiguration instead of the old global variable
         strKey = m_arrHistoryData(r, HistorySource.GetCol("Affiliate")) & "|" & _
                  m_arrHistoryData(r, HistorySource.GetCol("Customer")) & "|" & _
                  m_arrHistoryData(r, HistorySource.GetCol("KeyFigure")) & "|" & _
@@ -224,7 +211,6 @@ Private Sub BuildHistoryCache()
         If Not m_dictHistoryCache.Exists(strKey) Then
             Set dictMonthlyValues = CreateObject("Scripting.Dictionary")
             For c = HistorySource.StartOfMonthsCol To UBound(m_arrHistoryData, 2)
-                ' NEW: Use robust date parsing for headers from Power Query
                 dteMonth = TryParseDate(m_arrHistoryData(1, c))
                 If dteMonth > 0 Then
                     dictMonthlyValues.Add dteMonth, m_arrHistoryData(r, c)
@@ -240,22 +226,16 @@ Private Sub BuildDataCaches()
     Dim strSubTierKey As String, strTierKey As String, strDemandKey As String
     Dim aff As String, cust As String, tier As String, subTier As String, kf As String
     
-    ' --- Build Historical Sum Cache ---
     Set m_dictHistSumCache = CreateObject("Scripting.Dictionary")
     m_dictHistSumCache.CompareMode = vbTextCompare
     For r = 2 To UBound(m_arrHistoryData, 1)
-        ' Use the new accessor function from mConfiguration instead of the old global variable
         aff = m_arrHistoryData(r, HistorySource.GetCol("Affiliate"))
         cust = m_arrHistoryData(r, HistorySource.GetCol("Customer"))
         tier = m_arrHistoryData(r, HistorySource.GetCol("Tier"))
         subTier = m_arrHistoryData(r, HistorySource.GetCol("SubTier"))
         kf = m_arrHistoryData(r, HistorySource.GetCol("KeyFigure"))
         
-        ' UPDATED: Keys now include Customer.
-        ' Sorted alphabetically for sub-tier: "Affiliate", "Customer", "ForecastSubTier", "ForecastTier", "KeyFigure"
         strSubTierKey = aff & "|" & cust & "|" & subTier & "|" & tier & "|" & kf
-        
-        ' Sorted alphabetically for tier: "Affiliate", "Customer", "ForecastTier", "KeyFigure"
         strTierKey = aff & "|" & cust & "|" & tier & "|" & kf
                  
         dblSum = 0
@@ -267,19 +247,15 @@ Private Sub BuildDataCaches()
         m_dictHistSumCache.item(strTierKey) = m_dictHistSumCache.item(strTierKey) + dblSum
     Next r
 
-    ' --- Build Demand Forecast Cache ---
     Set m_dictDemandCache = CreateObject("Scripting.Dictionary")
     m_dictDemandCache.CompareMode = vbTextCompare
     For r = 2 To UBound(m_arrDemandData, 1)
-        ' Use the new accessor function from mConfiguration instead of the old global variable
         aff = m_arrDemandData(r, DemandSource.GetCol("Affiliate"))
         cust = m_arrDemandData(r, DemandSource.GetCol("Customer"))
         tier = m_arrDemandData(r, DemandSource.GetCol("Tier"))
         kf = m_arrDemandData(r, DemandSource.GetCol("KeyFigure"))
         
         For c = DemandSource.StartOfMonthsCol To UBound(m_arrDemandData, 2)
-            ' UPDATED: Key now includes Customer.
-            ' Sorted alphabetically: "Affiliate", "Customer", "ForecastTier", "KeyFigure", "Month"
             strDemandKey = aff & "|" & cust & "|" & tier & "|" & kf & "|" & CDate(m_arrDemandData(1, c))
             
             If IsNumeric(m_arrDemandData(r, c)) Then
@@ -296,8 +272,6 @@ End Sub
 '================================================================================================
 
 Private Function TryParseDate(ByVal varDate As Variant) As Date
-' Purpose: Robustly converts a variant (which could be a date, a number, or a string
-'          like "dd/mm/yyyy") into a valid VBA Date. Returns 0 if conversion fails.
     On Error Resume Next
     Dim dtmTemp As Date
     
@@ -306,7 +280,6 @@ Private Function TryParseDate(ByVal varDate As Variant) As Date
     ElseIf IsNumeric(varDate) Then
         dtmTemp = CDate(varDate)
     ElseIf InStr(1, varDate, "/") > 0 Then
-        ' Handle "dd/mm/yyyy" or "d/m/yyyy" text format from Power Query
         Dim arrDateParts() As String
         arrDateParts = Split(varDate, "/")
         If UBound(arrDateParts) = 2 Then
@@ -347,7 +320,8 @@ Private Function GetUniqueValues(arrData As Variant, ByVal lngCol As Long) As Ob
     Set GetUniqueValues = dict
 End Function
 
-Private Sub WriteToLog(ByVal logType As logType, ByVal procedureName As String, ByVal message As String, Optional ByVal errNumber As Long = 0, Optional ByVal errContext As String = "")
+' THE FIX IS HERE: The parameter type is now explicitly qualified.
+Private Sub WriteToLog(ByVal logType As mConfiguration.logType, ByVal procedureName As String, ByVal message As String, Optional ByVal errNumber As Long = 0, Optional ByVal errContext As String = "")
     If m_wsLog Is Nothing Then Exit Sub
     Dim nextRow As Long: nextRow = m_wsLog.Cells(m_wsLog.Rows.Count, "A").End(xlUp).Row + 1
     With m_wsLog.Rows(nextRow)
@@ -362,7 +336,8 @@ Private Sub LogPerformance(ByRef tCheckpoint As Double, ByVal strStageName As St
     tCheckpoint = Timer
 End Sub
 
-Private Function GetLogTypeString(ByVal logType As logType) As String
+' THE FIX IS HERE: The parameter type is now explicitly qualified.
+Private Function GetLogTypeString(ByVal logType As mConfiguration.logType) As String
     Select Case logType
         Case ltInfo: GetLogTypeString = "Info"
         Case ltWarning: GetLogTypeString = "Warning"

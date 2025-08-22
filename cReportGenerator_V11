@@ -6,17 +6,17 @@ Option Explicit
 ' Purpose:     Encapsulates all logic for generating the final formatted Excel reports.
 '              This class takes a fully processed data manager object and handles the
 '              creation, population, and styling of the output workbook.
-' Version:     3.8
+' Version:     3.9
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V3.8:        - BUGFIX: Corrected a "Wrong number of arguments" compile error. The call
-'                to LogPerformance was changed to the correct WriteToLog function to match
-'                the signature in the new mUtilities module.
-' V3.7:        - REFACTOR: Removed helper functions to call them from mUtilities.
-' V3.6:        - REFACTOR: Replaced hard-coded strings with constants.
-' V3.5:        - PERFORMANCE: Optimized the PopulateSummarySheets method.
+' V3.9:        - BUGFIX: Restored class-specific helper functions (e.g.,
+'                GetItemsForTierAndCustomer) that were incorrectly moved during
+'                refactoring. This resolves the "Method or data member not found"
+'                compile error.
+' V3.8:        - BUGFIX: Corrected a "Wrong number of arguments" compile error.
+' V3.7:        - REFACTOR: Removed generic helper functions to call them from mUtilities.
 '================================================================================================
 
 ' --- Private Member Variables (State for a single report job) ---
@@ -94,7 +94,6 @@ Public Sub GenerateCustomerReport(ByVal strAffiliate As String, ByVal strCustome
         wbReport.Close SaveChanges:=False
     End If
     
-    ' BUGFIX: Call the correct logging function with the correct arguments
     WriteToLog m_wsLog, ltProfile, "GenerateCustomerReport", "Finished report for " & strAffiliate & " - " & strCustomer & " in " & Format$(Timer - tStart, "#,##0.00") & "s"
 End Sub
 
@@ -124,7 +123,7 @@ Private Sub PopulateTierSheet(ByVal ws As Worksheet, ByVal strTier As String, By
         arrHeader(staticColCount + monthIndex) = Format$(m_DataManager.HistoryDataArray(1, g_dsHistory.StartOfMonthsCol + monthIndex - 1), "mmm-yy")
     Next monthIndex
     For monthIndex = 1 To numFcstMonths
-        arrHeader(staticColCount + numHistMonths + monthIndex) = Format$(m_DataManager.DemandDataArray(1, g_dsDemand.StartOfMonthsCol + monthIndex - 1), "mmm-yy")
+        arrHeader(staticColCount + monthIndex) = Format$(m_DataManager.DemandDataArray(1, g_dsDemand.StartOfMonthsCol + monthIndex - 1), "mmm-yy")
     Next monthIndex
     
     ReDim arrOutput(1 To (colProducts.Count * m_DataManager.KeyFigures.Count) + m_DataManager.KeyFigures.Count, 1 To UBound(arrHeader))
@@ -337,22 +336,95 @@ Private Sub FormatSummarySheet(ByVal ws As Worksheet)
 End Sub
 
 '================================================================================================
-'--- PRIVATE HELPERS & UTILITIES ---
+'--- PRIVATE HELPERS & UTILITIES (Specific to this Class) ---
 '================================================================================================
 
 Private Function GetItemsForTierAndCustomer(strTier As String, strCustomer As String) As Collection
-    ' This function now correctly calls the centralized utility function
-    Set GetItemsForTierAndCustomer = mUtilities.GetItemsForTierAndCustomer(m_DataManager, m_strAffiliate, strTier, strCustomer)
+' Purpose: Finds all unique products relevant to a specific Tier and Customer.
+' This new logic includes items with historical sales AND their successors.
+    Set GetItemsForTierAndCustomer = New Collection
+    Dim dictItemsForReport As Object: Set dictItemsForReport = CreateObject("Scripting.Dictionary")
+    
+    Dim rowIndex As Long, arrHistory As Variant: arrHistory = m_DataManager.HistoryDataArray
+    Dim strLocalItemNbr As String, currentItem As cForecastItem
+    
+    ' PERFORMANCE: Build a lookup map once to find a master item key from a LocalItemNbr.
+    Dim mapLocalToMasterKey As Object: Set mapLocalToMasterKey = CreateObject("Scripting.Dictionary")
+    Dim varKey As Variant, obj As cForecastItem
+    For Each varKey In m_DataManager.ForecastItems.Keys
+        Set obj = m_DataManager.ForecastItems.item(varKey)
+        If obj.Affiliate = m_strAffiliate Then
+            If Not mapLocalToMasterKey.Exists(obj.LocalItemNbr) Then
+                mapLocalToMasterKey.Add obj.LocalItemNbr, varKey
+            End If
+        End If
+    Next varKey
+
+    ' STEP 1: Iterate through historical sales to find all relevant products.
+    For rowIndex = 2 To UBound(arrHistory, 1)
+        If arrHistory(rowIndex, g_dsHistory.GetCol(FIELD_AFFILIATE)) = m_strAffiliate And _
+           arrHistory(rowIndex, g_dsHistory.GetCol(FIELD_TIER)) = strTier And _
+           arrHistory(rowIndex, g_dsHistory.GetCol(FIELD_CUSTOMER)) = strCustomer Then
+            
+            strLocalItemNbr = arrHistory(rowIndex, g_dsHistory.GetCol(FIELD_LOCALITEMNBR))
+            
+            ' Find the primary item that has historical sales
+            If mapLocalToMasterKey.Exists(strLocalItemNbr) Then
+                Dim masterKey As String: masterKey = mapLocalToMasterKey.item(strLocalItemNbr)
+                
+                If Not dictItemsForReport.Exists(masterKey) Then
+                    Set currentItem = m_DataManager.ForecastItems.item(masterKey)
+                    dictItemsForReport.Add masterKey, currentItem
+                    
+                    ' STEP 2: BUGFIX - Traverse the ENTIRE successor chain (A -> B -> C)
+                    Do While currentItem.IsPhasingOut And Len(currentItem.SupersededByProductID) > 0
+                        Dim successorKey As String: successorKey = m_strAffiliate & "|" & currentItem.SupersededByProductID
+                        
+                        If m_DataManager.ForecastItems.Exists(successorKey) Then
+                            ' Check if we've already added this to avoid infinite loops
+                            If Not dictItemsForReport.Exists(successorKey) Then
+                                Set currentItem = m_DataManager.ForecastItems.item(successorKey)
+                                dictItemsForReport.Add successorKey, currentItem
+                            Else
+                                Exit Do ' Already processed this item, break the loop
+                            End If
+                        Else
+                            Exit Do ' Chain is broken, break the loop
+                        End If
+                    Loop
+                End If
+            End If
+        End If
+    Next rowIndex
+    
+    ' STEP 3: Add the found items from the dictionary to the final collection
+    If dictItemsForReport.Count > 0 Then
+        Dim key As Variant
+        For Each key In dictItemsForReport.Keys
+            GetItemsForTierAndCustomer.Add dictItemsForReport.item(key)
+        Next key
+    End If
 End Function
 
 Private Function GetUniqueTiersForCustomer(ByVal strAffiliate As String, ByVal strCustomer As String) As Object
-    ' This function now correctly calls the centralized utility function
-    Set GetUniqueTiersForCustomer = mUtilities.GetUniqueTiersForCustomer(m_DataManager.DemandDataArray, strAffiliate, strCustomer)
+    ' This helper gets all unique Tiers for a specific Affiliate and Customer
+    Set GetUniqueTiersForCustomer = CreateObject("Scripting.Dictionary")
+    Dim rowIndex As Long, arrDemand As Variant: arrDemand = m_DataManager.DemandDataArray
+    
+    For rowIndex = 2 To UBound(arrDemand, 1)
+        If arrDemand(rowIndex, g_dsDemand.GetCol(FIELD_AFFILIATE)) = strAffiliate And _
+           arrDemand(rowIndex, g_dsDemand.GetCol(FIELD_CUSTOMER)) = strCustomer Then
+            Dim strTier As String: strTier = arrDemand(rowIndex, g_dsDemand.GetCol(FIELD_TIER))
+            If Not GetUniqueTiersForCustomer.Exists(strTier) Then
+                GetUniqueTiersForCustomer.Add strTier, 1
+            End If
+        End If
+    Next rowIndex
 End Function
 
 Private Function GetOutputFilePath() As String
-    ' This function now correctly calls the centralized utility function
-    GetOutputFilePath = mUtilities.GetOutputFilePath(m_strBasePath, m_strAffiliate, m_strCustomer)
+    ' File path now includes the customer name for separate file generation
+    GetOutputFilePath = m_strBasePath & "\Demand Forecast - " & m_strAffiliate & " - " & m_strCustomer & " - " & Format$(Now, "ddmmyyyy_hhmmss") & ".xlsx"
 End Function
 
 '================================================================================================

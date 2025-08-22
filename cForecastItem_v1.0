@@ -1,0 +1,201 @@
+'@Folder("Classes")
+Option Explicit
+
+'================================================================================================
+' Class:       cForecastItem
+' Purpose:     Represents a single, generic item to be forecasted. This class is
+'              primarily a data container for an item's properties and its
+'              calculated forecast values.
+' Version:     3.0
+' Author:      Ayush Goyal
+' Date:        22-Aug-2025
+'
+' Change Log:
+' V3.0:        - REFACTOR: Updated HandlePhaseOutInit and GetForecastMultiplier methods to
+'                use the new explicit product statuses (psPhaseOut, psPhaseIn, etc.)
+'                instead of intermediate boolean flags. The logic is now clearer.
+' V2.1:        - No code change. Correctly calls GetStatusEnum from mConfiguration.
+'================================================================================================
+
+' --- Private Member Variables ---
+Private m_Dimensions As cDimensionKey
+Private m_Properties As Object
+Private m_ForecastValues As Object
+
+' --- Constants ---
+Private Const DEFAULT_PHASE_OUT_PCT As Double = 1#
+
+'================================================================================================
+'--- PUBLIC WRAPPER PROPERTIES (For Reporting and Business Logic) ---
+'================================================================================================
+
+'@Ignore UnusedMember
+Public Property Get Affiliate() As String: Affiliate = GetProp("Affiliate"): End Property
+'@Ignore UnusedMember
+Public Property Get ForecastTier() As String: ForecastTier = GetProp("Tier"): End Property
+'@Ignore UnusedMember
+Public Property Get ForecastSubTier() As String: ForecastSubTier = GetProp("SubTier"): End Property
+'@Ignore UnusedMember
+Public Property Get LocalItemNbr() As String: LocalItemNbr = GetProp("LocalItemNbr"): End Property
+'@Ignore UnusedMember
+Public Property Get Description() As String: Description = GetProp("Description"): End Property
+'@Ignore UnusedMember
+Public Property Get ISD() As String: ISD = GetProp("ISD"): End Property
+'@Ignore UnusedMember
+Public Property Get Status() As ProductStatus: Status = GetProp("Status"): End Property
+
+Public Property Get PhaseOutDate() As Variant
+    Dim val As Variant
+    val = GetProp("PhaseOutDate")
+    If IsDate(val) And val > 0 Then
+        PhaseOutDate = val
+    Else
+        PhaseOutDate = Empty
+    End If
+End Property
+
+'@Ignore UnusedMember
+Public Property Get PhaseOutPercent() As Double: PhaseOutPercent = GetProp("PhaseOutPercent"): End Property
+'@Ignore UnusedMember
+Public Property Get SupersededByProductID() As String: SupersededByProductID = GetProp("SupersededBy"): End Property
+
+' This property now derives its value directly from the item's status
+Public Property Get IsPhasingOut() As Boolean
+    IsPhasingOut = (Me.Status = psPhaseOut Or Me.Status = psDiscontinued)
+End Property
+
+' These properties are set by the cProductLifecycle class when a transfer occurs
+'@Ignore UnusedMember
+Public Property Get IsPhasingIn() As Boolean: IsPhasingIn = GetProp("IsPhasingIn", False): End Property
+'@Ignore UnusedMember
+Public Property Get PhaseInDate() As Date: PhaseInDate = GetProp("PhaseInDate"): End Property
+'@Ignore UnusedMember
+Public Property Get PhaseInPercent() As Double: PhaseInPercent = GetProp("PhaseInPercent"): End Property
+
+Public Property Get ForecastValues() As Object: Set ForecastValues = m_ForecastValues: End Property
+Public Property Set ForecastValues(ByVal Value As Object): Set m_ForecastValues = Value: End Property
+
+Public Property Get Dimensions() As cDimensionKey: Set Dimensions = m_Dimensions: End Property
+
+'@Ignore UnusedMember
+Public Property Get StatusString() As String
+    StatusString = GetStatusString(Me.Status)
+End Property
+
+'================================================================================================
+'--- INITIALIZATION AND LIFECYCLE LOGIC ---
+'================================================================================================
+
+Private Sub Class_Initialize()
+    Set m_Dimensions = New cDimensionKey
+    Set m_Properties = CreateObject("Scripting.Dictionary")
+    m_Properties.CompareMode = vbTextCompare
+    Set m_ForecastValues = CreateObject("Scripting.Dictionary")
+End Sub
+
+Public Sub Init(ByVal ds As cDataSource, ByVal arrDataSource As Variant, ByVal lngRow As Long)
+    m_Dimensions.Add "Affiliate", Trim$(arrDataSource(lngRow, ds.GetCol("Affiliate")))
+    m_Dimensions.Add "ISD", Trim$(arrDataSource(lngRow, ds.GetCol("ISD")))
+    
+    AddProp "Affiliate", arrDataSource(lngRow, ds.GetCol("Affiliate"))
+    AddProp "Tier", arrDataSource(lngRow, ds.GetCol("Tier"))
+    AddProp "SubTier", arrDataSource(lngRow, ds.GetCol("SubTier"))
+    AddProp "LocalItemNbr", arrDataSource(lngRow, ds.GetCol("LocalItemNbr"))
+    AddProp "Description", arrDataSource(lngRow, ds.GetCol("Description"))
+    AddProp "ISD", arrDataSource(lngRow, ds.GetCol("ISD"))
+    AddProp "Status", GetStatusEnum(arrDataSource(lngRow, ds.GetCol("Status")))
+    AddProp "SupersededBy", arrDataSource(lngRow, ds.GetCol("SupersededBy"))
+    
+    HandlePhaseOutInit ds, arrDataSource, lngRow
+End Sub
+
+Public Function GetForecastMultiplier(ByVal dteForecastDate As Date) As Double
+    GetForecastMultiplier = 1 ' Default to full forecast
+
+    ' Check for a phase-in event (set by the lifecycle manager)
+    If Me.IsPhasingIn And Me.PhaseInDate > 0 Then
+        If FirstDayOfMonth(dteForecastDate) < FirstDayOfMonth(Me.PhaseInDate) Then
+            GetForecastMultiplier = 0
+            Exit Function
+        ElseIf FirstDayOfMonth(dteForecastDate) = FirstDayOfMonth(Me.PhaseInDate) Then
+            GetForecastMultiplier = Me.PhaseInPercent
+            Exit Function
+        End If
+    End If
+
+    ' Check for a phase-out or discontinued status
+    If Me.IsPhasingOut And Me.PhaseOutDate > 0 Then
+        If FirstDayOfMonth(dteForecastDate) > FirstDayOfMonth(Me.PhaseOutDate) Then
+            GetForecastMultiplier = 0
+        ElseIf FirstDayOfMonth(dteForecastDate) = FirstDayOfMonth(Me.PhaseOutDate) Then
+            GetForecastMultiplier = Me.PhaseOutPercent
+        End If
+    End If
+End Function
+
+Public Sub MarkAsPhasingIn(ByVal dteDate As Date, ByVal dblPercent As Double)
+    ' This method is called by cProductLifecycle on a SUCCESSOR item
+    AddProp "IsPhasingIn", True
+    AddProp "PhaseInDate", dteDate
+    AddProp "PhaseInPercent", dblPercent
+End Sub
+
+Public Function DebugSummary() As String
+    DebugSummary = Me.Affiliate & " | " & Me.LocalItemNbr & " | " & GetStatusString(Me.Status)
+End Function
+
+'================================================================================================
+'--- PRIVATE HELPER METHODS ---
+'================================================================================================
+
+Public Sub AddProp(ByVal key As String, ByVal Value As Variant)
+    Dim cleanValue As Variant
+    If IsObject(Value) Then
+        Set cleanValue = Value
+    ElseIf IsDate(Value) Then
+        cleanValue = CDate(Value)
+    Else
+        cleanValue = Trim$(CStr(Value))
+    End If
+
+    If m_Properties.Exists(key) Then
+        m_Properties.item(key) = cleanValue
+    Else
+        m_Properties.Add key, cleanValue
+    End If
+End Sub
+
+Private Function GetProp(ByVal key As String, Optional ByVal DefaultValue As Variant) As Variant
+    If m_Properties.Exists(key) Then
+        GetProp = m_Properties.item(key)
+    Else
+        If IsMissing(DefaultValue) Then
+            GetProp = Empty
+        Else
+            GetProp = DefaultValue
+        End If
+    End If
+End Function
+
+Private Sub HandlePhaseOutInit(ByVal ds As cDataSource, ByVal arrDataSource As Variant, ByVal lngRow As Long)
+    ' REFACTORED: This logic is now simpler and driven directly by the product's status.
+    
+    ' First, set the phase-out percentage from the source data.
+    Dim varPhaseOutPct As Variant: varPhaseOutPct = arrDataSource(lngRow, ds.GetCol("PhaseOutPercent"))
+    If IsNumeric(varPhaseOutPct) And varPhaseOutPct >= 0 And varPhaseOutPct <= 1 Then
+        AddProp "PhaseOutPercent", CDbl(varPhaseOutPct)
+    Else
+        AddProp "PhaseOutPercent", DEFAULT_PHASE_OUT_PCT
+    End If
+
+    ' Then, if the item is phasing out or discontinued, store its phase-out date.
+    If Me.Status = psPhaseOut Or Me.Status = psDiscontinued Then
+        If IsDate(arrDataSource(lngRow, ds.GetCol("PhaseOutDate"))) Then
+            AddProp "PhaseOutDate", CDate(arrDataSource(lngRow, ds.GetCol("PhaseOutDate")))
+        End If
+    End If
+End Sub
+
+Private Function FirstDayOfMonth(ByVal d As Date) As Date
+    FirstDayOfMonth = DateSerial(Year(d), Month(d), 1)
+End Function

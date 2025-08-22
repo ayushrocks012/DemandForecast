@@ -1,0 +1,51 @@
+'@Folder("Classes")
+Option Explicit
+
+'================================================================================================
+' Class:       cReportColumn
+' Purpose:     Represents the configuration for a single column in a generated report.
+' Version:     30.0
+' Author:      Ayush Goyal
+' Date:        08-Jul-2025
+'
+' Change Log:
+' V30.0:       - Applied Rubberduck code inspection fixes. Replaced public fields
+'                with private members and public Property Get/Let procedures to
+'                ensure proper encapsulation.
+' V29.0:       - Initial class creation.
+'================================================================================================
+
+' --- Private Member Variables ---
+Private m_HeaderText As String
+Private m_SourceProperty As String
+Private m_ColumnWidth As Double
+Private m_NumberFormat As String
+
+' --- Public Properties ---
+Public Property Get HeaderText() As String
+    HeaderText = m_HeaderText
+End Property
+Public Property Let HeaderText(ByVal Value As String)
+    m_HeaderText = Value
+End Property
+
+Public Property Get SourceProperty() As String
+    SourceProperty = m_SourceProperty
+End Property
+Public Property Let SourceProperty(ByVal Value As String)
+    m_SourceProperty = Value
+End Property
+
+Public Property Get ColumnWidth() As Double
+    ColumnWidth = m_ColumnWidth
+End Property
+Public Property Let ColumnWidth(ByVal Value As Double)
+    m_ColumnWidth = Value
+End Property
+
+Public Property Get NumberFormat() As String
+    NumberFormat = m_NumberFormat
+End Property
+Public Property Let NumberFormat(ByVal Value As String)
+    m_NumberFormat = Value
+End Property

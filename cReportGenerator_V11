@@ -6,17 +6,17 @@ Option Explicit
 ' Purpose:     Encapsulates all logic for generating the final formatted Excel reports.
 '              This class takes a fully processed data manager object and handles the
 '              creation, population, and styling of the output workbook.
-' Version:     3.7
+' Version:     3.8
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V3.7:        - REFACTOR: Removed all general-purpose helper functions and updated the
-'                class to call them from the new, centralized mUtilities module. This
-'                completes the refactoring for Separation of Concerns.
+' V3.8:        - BUGFIX: Corrected a "Wrong number of arguments" compile error. The call
+'                to LogPerformance was changed to the correct WriteToLog function to match
+'                the signature in the new mUtilities module.
+' V3.7:        - REFACTOR: Removed helper functions to call them from mUtilities.
 ' V3.6:        - REFACTOR: Replaced hard-coded strings with constants.
 ' V3.5:        - PERFORMANCE: Optimized the PopulateSummarySheets method.
-' V3.4:        - PERFORMANCE: Implemented deferred formatting.
 '================================================================================================
 
 ' --- Private Member Variables (State for a single report job) ---
@@ -94,7 +94,8 @@ Public Sub GenerateCustomerReport(ByVal strAffiliate As String, ByVal strCustome
         wbReport.Close SaveChanges:=False
     End If
     
-    LogPerformance m_wsLog, tStart, "GenerateCustomerReport", "Finished report for " & strAffiliate & " - " & strCustomer & " in " & Format$(Timer - tStart, "#,##0.00") & "s"
+    ' BUGFIX: Call the correct logging function with the correct arguments
+    WriteToLog m_wsLog, ltProfile, "GenerateCustomerReport", "Finished report for " & strAffiliate & " - " & strCustomer & " in " & Format$(Timer - tStart, "#,##0.00") & "s"
 End Sub
 
 '================================================================================================
@@ -340,17 +341,17 @@ End Sub
 '================================================================================================
 
 Private Function GetItemsForTierAndCustomer(strTier As String, strCustomer As String) As Collection
-    ' Call utility from mUtilities
+    ' This function now correctly calls the centralized utility function
     Set GetItemsForTierAndCustomer = mUtilities.GetItemsForTierAndCustomer(m_DataManager, m_strAffiliate, strTier, strCustomer)
 End Function
 
 Private Function GetUniqueTiersForCustomer(ByVal strAffiliate As String, ByVal strCustomer As String) As Object
-    ' Call utility from mUtilities
+    ' This function now correctly calls the centralized utility function
     Set GetUniqueTiersForCustomer = mUtilities.GetUniqueTiersForCustomer(m_DataManager.DemandDataArray, strAffiliate, strCustomer)
 End Function
 
 Private Function GetOutputFilePath() As String
-    ' Call utility from mUtilities
+    ' This function now correctly calls the centralized utility function
     GetOutputFilePath = mUtilities.GetOutputFilePath(m_strBasePath, m_strAffiliate, m_strCustomer)
 End Function
 

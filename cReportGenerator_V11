@@ -6,18 +6,17 @@ Option Explicit
 ' Purpose:     Encapsulates all logic for generating the final formatted Excel reports.
 '              This class takes a fully processed data manager object and handles the
 '              creation, population, and styling of the output workbook.
-' Version:     3.6
+' Version:     3.7
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V3.6:        - REFACTOR: Replaced all hard-coded data field strings in helper functions
-'                with the new public constants from mConfiguration. This completes the
-'                refactoring for maintainability.
+' V3.7:        - REFACTOR: Removed all general-purpose helper functions and updated the
+'                class to call them from the new, centralized mUtilities module. This
+'                completes the refactoring for Separation of Concerns.
+' V3.6:        - REFACTOR: Replaced hard-coded strings with constants.
 ' V3.5:        - PERFORMANCE: Optimized the PopulateSummarySheets method.
 ' V3.4:        - PERFORMANCE: Implemented deferred formatting.
-' V3.3:        - FEATURE: Added detailed logging for start/completion of each file.
-' V3.2:        - BUGFIX: Re-engineered logic to correctly handle "deep chains".
 '================================================================================================
 
 ' --- Private Member Variables (State for a single report job) ---
@@ -41,7 +40,7 @@ Public Sub GenerateCustomerReport(ByVal strAffiliate As String, ByVal strCustome
     m_strAffiliate = strAffiliate
     m_strCustomer = strCustomer
     
-    WriteToLog ltInfo, "GenerateCustomerReport", "Starting report for " & strAffiliate & " - " & strCustomer
+    WriteToLog m_wsLog, ltInfo, "GenerateCustomerReport", "Starting report for " & strAffiliate & " - " & strCustomer
     Dim tStart As Double: tStart = Timer
     
     Dim wbReport As Workbook, ws As Worksheet
@@ -86,16 +85,16 @@ Public Sub GenerateCustomerReport(ByVal strAffiliate As String, ByVal strCustome
         On Error Resume Next
         wbReport.SaveAs strFilePath
         If Err.Number <> 0 Then
-            WriteToLog ltError, "ReportGenerator.Save", "Failed to save report for " & m_strAffiliate & " - " & m_strCustomer, Err.Number, "Path: " & strFilePath
+            WriteToLog m_wsLog, ltError, "ReportGenerator.Save", "Failed to save report for " & m_strAffiliate & " - " & m_strCustomer, Err.Number, "Path: " & strFilePath
         Else
-            WriteToLog ltInfo, "ReportGenerator.Save", "Report saved to " & strFilePath
+            WriteToLog m_wsLog, ltInfo, "ReportGenerator.Save", "Report saved to " & strFilePath
         End If
         On Error GoTo 0
         
         wbReport.Close SaveChanges:=False
     End If
     
-    WriteToLog ltProfile, "GenerateCustomerReport", "Finished report for " & strAffiliate & " - " & strCustomer & " in " & Format$(Timer - tStart, "#,##0.00") & "s"
+    LogPerformance m_wsLog, tStart, "GenerateCustomerReport", "Finished report for " & strAffiliate & " - " & strCustomer & " in " & Format$(Timer - tStart, "#,##0.00") & "s"
 End Sub
 
 '================================================================================================
@@ -341,100 +340,23 @@ End Sub
 '================================================================================================
 
 Private Function GetItemsForTierAndCustomer(strTier As String, strCustomer As String) As Collection
-    Set GetItemsForTierAndCustomer = New Collection
-    Dim dictItemsForReport As Object: Set dictItemsForReport = CreateObject("Scripting.Dictionary")
-    Dim rowIndex As Long, arrHistory As Variant: arrHistory = m_DataManager.HistoryDataArray
-    Dim strLocalItemNbr As String, currentItem As cForecastItem
-    Dim mapLocalToMasterKey As Object: Set mapLocalToMasterKey = CreateObject("Scripting.Dictionary")
-    Dim varKey As Variant, obj As cForecastItem
-    For Each varKey In m_DataManager.ForecastItems.Keys
-        Set obj = m_DataManager.ForecastItems.item(varKey)
-        If obj.Affiliate = m_strAffiliate Then
-            If Not mapLocalToMasterKey.Exists(obj.LocalItemNbr) Then
-                mapLocalToMasterKey.Add obj.LocalItemNbr, varKey
-            End If
-        End If
-    Next varKey
-    For rowIndex = 2 To UBound(arrHistory, 1)
-        If arrHistory(rowIndex, g_dsHistory.GetCol(FIELD_AFFILIATE)) = m_strAffiliate And _
-           arrHistory(rowIndex, g_dsHistory.GetCol(FIELD_TIER)) = strTier And _
-           arrHistory(rowIndex, g_dsHistory.GetCol(FIELD_CUSTOMER)) = strCustomer Then
-            strLocalItemNbr = arrHistory(rowIndex, g_dsHistory.GetCol(FIELD_LOCALITEMNBR))
-            If mapLocalToMasterKey.Exists(strLocalItemNbr) Then
-                Dim masterKey As String: masterKey = mapLocalToMasterKey.item(strLocalItemNbr)
-                If Not dictItemsForReport.Exists(masterKey) Then
-                    Set currentItem = m_DataManager.ForecastItems.item(masterKey)
-                    dictItemsForReport.Add masterKey, currentItem
-                    Do While currentItem.IsPhasingOut And Len(currentItem.SupersededByProductID) > 0
-                        Dim successorKey As String: successorKey = m_strAffiliate & "|" & currentItem.SupersededByProductID
-                        If m_DataManager.ForecastItems.Exists(successorKey) Then
-                            If Not dictItemsForReport.Exists(successorKey) Then
-                                Set currentItem = m_DataManager.ForecastItems.item(successorKey)
-                                dictItemsForReport.Add successorKey, currentItem
-                            Else
-                                Exit Do
-                            End If
-                        Else
-                            Exit Do
-                        End If
-                    Loop
-                End If
-            End If
-        End If
-    Next rowIndex
-    If dictItemsForReport.Count > 0 Then
-        Dim key As Variant
-        For Each key In dictItemsForReport.Keys
-            GetItemsForTierAndCustomer.Add dictItemsForReport.item(key)
-        Next key
-    End If
+    ' Call utility from mUtilities
+    Set GetItemsForTierAndCustomer = mUtilities.GetItemsForTierAndCustomer(m_DataManager, m_strAffiliate, strTier, strCustomer)
 End Function
 
 Private Function GetUniqueTiersForCustomer(ByVal strAffiliate As String, ByVal strCustomer As String) As Object
-    Set GetUniqueTiersForCustomer = CreateObject("Scripting.Dictionary")
-    Dim rowIndex As Long, arrDemand As Variant: arrDemand = m_DataManager.DemandDataArray
-    For rowIndex = 2 To UBound(arrDemand, 1)
-        If arrDemand(rowIndex, g_dsDemand.GetCol(FIELD_AFFILIATE)) = strAffiliate And _
-           arrDemand(rowIndex, g_dsDemand.GetCol(FIELD_CUSTOMER)) = strCustomer Then
-            Dim strTier As String: strTier = arrDemand(rowIndex, g_dsDemand.GetCol(FIELD_TIER))
-            If Not GetUniqueTiersForCustomer.Exists(strTier) Then
-                GetUniqueTiersForCustomer.Add strTier, 1
-            End If
-        End If
-    Next rowIndex
-End Function
-
-Private Function SanitizeSheetName(ByVal strName As String) As String
-    Dim sanitizedString As String: sanitizedString = strName
-    sanitizedString = Replace(sanitizedString, "/", "-"): sanitizedString = Replace(sanitizedString, "\", "-")
-    sanitizedString = Replace(sanitizedString, "?", ""): sanitizedString = Replace(sanitizedString, "*", "")
-    sanitizedString = Replace(sanitizedString, "[", ""): sanitizedString = Replace(sanitizedString, "]", "")
-    SanitizeSheetName = Left$(sanitizedString, 31)
+    ' Call utility from mUtilities
+    Set GetUniqueTiersForCustomer = mUtilities.GetUniqueTiersForCustomer(m_DataManager.DemandDataArray, strAffiliate, strCustomer)
 End Function
 
 Private Function GetOutputFilePath() As String
-    GetOutputFilePath = m_strBasePath & "\Demand Forecast - " & m_strAffiliate & " - " & m_strCustomer & " - " & Format$(Now, "ddmmyyyy_hhmmss") & ".xlsx"
+    ' Call utility from mUtilities
+    GetOutputFilePath = mUtilities.GetOutputFilePath(m_strBasePath, m_strAffiliate, m_strCustomer)
 End Function
 
-Private Sub WriteToLog(ByVal logType As logType, ByVal procedureName As String, ByVal message As String, Optional ByVal errNumber As Long = 0, Optional ByVal errContext As String = "")
-    If m_wsLog Is Nothing Then Exit Sub
-    Dim nextRow As Long: nextRow = m_wsLog.Cells(m_wsLog.Rows.Count, "A").End(xlUp).Row + 1
-    With m_wsLog.Rows(nextRow)
-        .Cells(1).Value = Now(): .Cells(2).Value = GetLogTypeString(logType)
-        .Cells(3).Value = procedureName: .Cells(4).Value = message
-        If errNumber <> 0 Then .Cells(5).Value = "Err " & errNumber & ": " & errContext Else .Cells(5).Value = errContext
-    End With
-End Sub
-
-Private Function GetLogTypeString(ByVal logType As logType) As String
-    Select Case logType
-        Case ltInfo: GetLogTypeString = "Info"
-        Case ltWarning: GetLogTypeString = "Warning"
-        Case ltError: GetLogTypeString = "Error"
-        Case ltFatal: GetLogTypeString = "FATAL"
-        Case ltProfile: GetLogTypeString = "Profile"
-    End Select
-End Function
+'================================================================================================
+'--- CLASS DESTRUCTOR ---
+'================================================================================================
 
 Private Sub Class_Terminate()
     Set m_DataManager = Nothing

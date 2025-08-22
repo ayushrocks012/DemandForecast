@@ -1,0 +1,30 @@
+'@Folder("Configuration")
+Option Explicit
+
+'================================================================================================
+' Module:      mTypes
+' Purpose:     Contains all globally accessible, custom type definitions (Enums) for the
+'              entire project. Separating these into their own module resolves VBA
+'              compile-order issues with class modules.
+' Version:     1.0
+' Author:      Ayush Goyal
+' Date:        22-Aug-2025
+'================================================================================================
+
+' --- ENUMERATIONS ---
+Public Enum ProductStatus
+    psNotApplicable = -1 ' Will be ignored during data load
+    psUnknown = 0
+    psActive = 1
+    psDiscontinued = 2
+    psPhaseOut = 3
+    psPhaseIn = 4
+End Enum
+
+Public Enum logType
+    ltInfo
+    ltWarning
+    ltError
+    ltFatal
+    ltProfile
+End Enum

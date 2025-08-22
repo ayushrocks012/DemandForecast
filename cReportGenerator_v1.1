@@ -6,21 +6,16 @@ Option Explicit
 ' Purpose:     Encapsulates all logic for generating the final formatted Excel reports.
 '              This class takes a fully processed data manager object and handles the
 '              creation, population, and styling of the output workbook.
-' Version:     3.6
+' Version:     3.7
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
+' V3.7:        - BUGFIX: Qualified the 'logType' enum with its module name
+'                (mConfiguration.logType) in procedure signatures to resolve compile errors.
 ' V3.6:        - REFACTOR: Updated all data source access to use the new encapsulated
-'                properties (e.g., HistorySource) from the mConfiguration module
-'                instead of direct global variables.
-' V3.5:        - PERFORMANCE: Optimized the PopulateSummarySheets method. It now pre-filters
-'                products for the current affiliate once, avoiding looping through the
-'                entire master product list for every summary sheet. This significantly
-'                reduces redundant processing.
-' V3.4:        - PERFORMANCE: Implemented deferred formatting.
-' V3.3:        - FEATURE: Added detailed logging for start/completion of each file.
-' V3.2:        - BUGFIX: Re-engineered logic to correctly handle "deep chains".
+'                properties (e.g., HistorySource) from the mConfiguration module.
+' V3.5:        - PERFORMANCE: Optimized the PopulateSummarySheets method.
 '================================================================================================
 
 ' --- Private Member Variables (State for a single report job) ---
@@ -54,7 +49,6 @@ Public Sub GenerateCustomerReport(ByVal strAffiliate As String, ByVal strCustome
     
     Set wbReport = Workbooks.Add
     
-    ' Create the Summary sheets first
     For Each varKeyFigure In m_DataManager.KeyFigures.Keys
         Set ws = wbReport.Sheets.Add(Before:=wbReport.Sheets(1))
         Dim sheetName As String: sheetName = SanitizeSheetName("Summary - " & CStr(varKeyFigure))
@@ -70,17 +64,14 @@ Public Sub GenerateCustomerReport(ByVal strAffiliate As String, ByVal strCustome
 
     Set dictTiers = GetUniqueTiersForCustomer(strAffiliate, strCustomer)
     
-    ' Create a detailed sheet for each tier
     For Each varTier In dictTiers.Keys
         Set ws = wbReport.Sheets.Add(After:=wbReport.Sheets(wbReport.Sheets.Count))
         ws.Name = SanitizeSheetName(CStr(varTier))
         PopulateTierSheet ws, CStr(varTier), strCustomer
     Next varTier
     
-    ' Populate the summary sheets with data for this customer
     PopulateSummarySheets wbReport, dictSheetToKeyFigureMap, strCustomer
     
-    ' Apply all formatting to all sheets in one go at the end.
     FormatAllSheets wbReport, dictSheetToKeyFigureMap
     
     If Not DEBUG_MODE Then
@@ -116,7 +107,6 @@ Private Sub PopulateTierSheet(ByVal ws As Worksheet, ByVal strTier As String, By
     If colProducts.Count = 0 Then Exit Sub
     
     staticColCount = GetTierReportCols().Count
-    ' Use the new accessor function from mConfiguration instead of the old global variable
     numHistMonths = UBound(m_DataManager.HistoryDataArray, 2) - HistorySource.StartOfMonthsCol + 1
     numFcstMonths = UBound(m_DataManager.DemandDataArray, 2) - DemandSource.StartOfMonthsCol + 1
     
@@ -199,7 +189,6 @@ Private Sub PopulateSummarySheets(ByVal wbReport As Workbook, ByVal dictMap As O
     Dim strFullKeyFigure As String, varKey As Variant
     
     staticColCount = GetSummaryReportCols().Count
-    ' Use the new accessor function from mConfiguration instead of the old global variable
     numFcstMonths = UBound(m_DataManager.DemandDataArray, 2) - DemandSource.StartOfMonthsCol + 1
     
     ReDim arrHeader(1 To staticColCount + numFcstMonths)
@@ -210,7 +199,6 @@ Private Sub PopulateSummarySheets(ByVal wbReport As Workbook, ByVal dictMap As O
         arrHeader(staticColCount + monthIndex) = format$(m_DataManager.DemandDataArray(1, DemandSource.StartOfMonthsCol + monthIndex - 1), "mmm-yy")
     Next monthIndex
     
-    ' PERFORMANCE: Pre-filter the items for the current affiliate ONCE.
     Dim affiliateItems As Collection
     Set affiliateItems = New Collection
     Dim tempItem As cForecastItem
@@ -227,7 +215,6 @@ Private Sub PopulateSummarySheets(ByVal wbReport As Workbook, ByVal dictMap As O
             ReDim arrOutput(1 To affiliateItems.Count, 1 To UBound(arrHeader))
             outputRowIndex = 1
             
-            ' PERFORMANCE: Loop through the much smaller, pre-filtered collection.
             For Each forecastItem In affiliateItems
                 For colIndex = 1 To staticColCount
                     Select Case GetSummaryReportCols()(colIndex).SourceProperty
@@ -262,14 +249,11 @@ Private Sub PopulateSummarySheets(ByVal wbReport As Workbook, ByVal dictMap As O
 End Sub
 
 Private Sub FormatAllSheets(ByVal wbReport As Workbook, ByVal dictSheetToKeyFigureMap As Object)
-' NEW: This single procedure handles all formatting for the workbook.
     Dim ws As Worksheet
     For Each ws In wbReport.Worksheets
         If dictSheetToKeyFigureMap.Exists(ws.Name) Then
-            ' This is a Summary Sheet
             FormatSummarySheet ws
         Else
-            ' This is a Tier Sheet
             FormatTierSheet ws
         End If
     Next ws
@@ -283,7 +267,6 @@ Private Sub FormatTierSheet(ByVal ws As Worksheet)
     
     staticColCount = GetTierReportCols().Count
     histColStart = staticColCount + 1
-    ' Use the new accessor function from mConfiguration instead of the old global variable
     fcstColStart = histColStart + (UBound(m_DataManager.HistoryDataArray, 2) - HistorySource.StartOfMonthsCol + 1)
     lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
     
@@ -367,7 +350,6 @@ Private Function GetItemsForTierAndCustomer(strTier As String, strCustomer As St
         End If
     Next varKey
     For rowIndex = 2 To UBound(arrHistory, 1)
-        ' Use the new accessor function from mConfiguration instead of the old global variable
         If arrHistory(rowIndex, HistorySource.GetCol("Affiliate")) = m_strAffiliate And _
            arrHistory(rowIndex, HistorySource.GetCol("Tier")) = strTier And _
            arrHistory(rowIndex, HistorySource.GetCol("Customer")) = strCustomer Then
@@ -406,7 +388,6 @@ Private Function GetUniqueTiersForCustomer(ByVal strAffiliate As String, ByVal s
     Set GetUniqueTiersForCustomer = CreateObject("Scripting.Dictionary")
     Dim rowIndex As Long, arrDemand As Variant: arrDemand = m_DataManager.DemandDataArray
     For rowIndex = 2 To UBound(arrDemand, 1)
-        ' Use the new accessor function from mConfiguration instead of the old global variable
         If arrDemand(rowIndex, DemandSource.GetCol("Affiliate")) = strAffiliate And _
            arrDemand(rowIndex, DemandSource.GetCol("Customer")) = strCustomer Then
             Dim strTier As String: strTier = arrDemand(rowIndex, DemandSource.GetCol("Tier"))
@@ -429,7 +410,8 @@ Private Function GetOutputFilePath() As String
     GetOutputFilePath = m_strBasePath & "\Demand Forecast - " & m_strAffiliate & " - " & m_strCustomer & " - " & format$(Now, "ddmmyyyy_hhmmss") & ".xlsx"
 End Function
 
-Private Sub WriteToLog(ByVal logType As logType, ByVal procedureName As String, ByVal message As String, Optional ByVal errNumber As Long = 0, Optional ByVal errContext As String = "")
+' THE FIX IS HERE: The parameter type is now explicitly qualified.
+Private Sub WriteToLog(ByVal logType As mConfiguration.logType, ByVal procedureName As String, ByVal message As String, Optional ByVal errNumber As Long = 0, Optional ByVal errContext As String = "")
     If m_wsLog Is Nothing Then Exit Sub
     Dim nextRow As Long: nextRow = m_wsLog.Cells(m_wsLog.Rows.Count, "A").End(xlUp).Row + 1
     With m_wsLog.Rows(nextRow)
@@ -439,7 +421,8 @@ Private Sub WriteToLog(ByVal logType As logType, ByVal procedureName As String, 
     End With
 End Sub
 
-Private Function GetLogTypeString(ByVal logType As logType) As String
+' THE FIX IS HERE: The parameter type is now explicitly qualified.
+Private Function GetLogTypeString(ByVal logType As mConfiguration.logType) As String
     Select Case logType
         Case ltInfo: GetLogTypeString = "Info"
         Case ltWarning: GetLogTypeString = "Warning"

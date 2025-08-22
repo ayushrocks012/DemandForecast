@@ -6,15 +6,16 @@ Option Explicit
 ' Purpose:     Encapsulates all data loading, validation, and caching logic. This class
 '              acts as the single source of truth for all data required by the forecasting
 '              engine, abstracting away the details of reading from Excel sheets.
-' Version:     2.2
+' Version:     2.3
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V2.2:        - REFACTOR: Removed all general-purpose helper functions and updated the
-'                class to call them from the new, centralized mUtilities module.
+' V2.3:        - REFACTOR: Updated the class to use the new read-only properties for
+'                data source objects (e.g., g_dsDemand -> dsDemand) to respect the
+'                newly implemented encapsulation in mConfiguration.
+' V2.2:        - REFACTOR: Removed helper functions to call them from mUtilities.
 ' V2.1:        - REFACTOR: Replaced hard-coded strings with constants.
-' V2.0:        - REFACTOR: Integrated "Customer" dimension and fixed date parsing.
 '================================================================================================
 
 ' --- Private Member Variables ---
@@ -67,8 +68,8 @@ Public Function LoadAndProcessData() As Boolean
     Set m_dictForecastItemMap = BuildForecastItemMap(m_arrStatusData)
     ValidateSuccessorLinks
     
-    Set m_dictAffiliates = GetUniqueValues(m_arrDemandData, g_dsDemand.GetCol(FIELD_AFFILIATE))
-    Set m_dictKeyFigures = GetUniqueValues(m_arrDemandData, g_dsDemand.GetCol(FIELD_KEYFIGURE))
+    Set m_dictAffiliates = GetUniqueValues(m_arrDemandData, dsDemand.GetCol(FIELD_AFFILIATE))
+    Set m_dictKeyFigures = GetUniqueValues(m_arrDemandData, dsDemand.GetCol(FIELD_KEYFIGURE))
     
     BuildHistoryCache
     BuildDataCaches
@@ -91,13 +92,13 @@ Private Function LoadAndValidateSourceSheets() As Boolean
     
     Application.StatusBar = "Loading and validating source data..."
     
-    If Not SheetExists(m_wbHost, g_dsProductStatus.sheetName) Then Err.Raise 515, , "Required sheet '" & g_dsProductStatus.sheetName & "' not found."
-    If Not SheetExists(m_wbHost, g_dsHistory.sheetName) Then Err.Raise 516, , "Required sheet '" & g_dsHistory.sheetName & "' not found."
-    If Not SheetExists(m_wbHost, g_dsDemand.sheetName) Then Err.Raise 517, , "Required sheet '" & g_dsDemand.sheetName & "' not found."
+    If Not SheetExists(m_wbHost, dsProductStatus.sheetName) Then Err.Raise 515, , "Required sheet '" & dsProductStatus.sheetName & "' not found."
+    If Not SheetExists(m_wbHost, dsHistory.sheetName) Then Err.Raise 516, , "Required sheet '" & dsHistory.sheetName & "' not found."
+    If Not SheetExists(m_wbHost, dsDemand.sheetName) Then Err.Raise 517, , "Required sheet '" & dsDemand.sheetName & "' not found."
     
-    m_arrStatusData = LoadDataToArray(m_wbHost.Sheets(g_dsProductStatus.sheetName))
-    m_arrHistoryData = LoadDataToArray(m_wbHost.Sheets(g_dsHistory.sheetName))
-    m_arrDemandData = LoadDataToArray(m_wbHost.Sheets(g_dsDemand.sheetName))
+    m_arrStatusData = LoadDataToArray(m_wbHost.Sheets(dsProductStatus.sheetName))
+    m_arrHistoryData = LoadDataToArray(m_wbHost.Sheets(dsHistory.sheetName))
+    m_arrDemandData = LoadDataToArray(m_wbHost.Sheets(dsDemand.sheetName))
     
     WriteToLog m_wsLog, ltInfo, "DataManager.Load", "All source data loaded and validated."
     LogPerformance m_wsLog, tCheckpoint, "Load & Validate Data"
@@ -116,12 +117,12 @@ Private Function BuildForecastItemMap(ByVal arrStatus As Variant) As Object
     Dim rowIndex As Long, obj As cForecastItem, strKey As String
     
     For rowIndex = 2 To UBound(arrStatus, 1)
-        If GetStatusEnum(arrStatus(rowIndex, g_dsProductStatus.GetCol(FIELD_STATUS))) <> psNotApplicable Then
-            strKey = arrStatus(rowIndex, g_dsProductStatus.GetCol(FIELD_AFFILIATE)) & "|" & arrStatus(rowIndex, g_dsProductStatus.GetCol(FIELD_ISD))
+        If GetStatusEnum(arrStatus(rowIndex, dsProductStatus.GetCol(FIELD_STATUS))) <> psNotApplicable Then
+            strKey = arrStatus(rowIndex, dsProductStatus.GetCol(FIELD_AFFILIATE)) & "|" & arrStatus(rowIndex, dsProductStatus.GetCol(FIELD_ISD))
             
             If Not dictMap.Exists(strKey) Then
                 Set obj = New cForecastItem
-                obj.Init g_dsProductStatus, arrStatus, rowIndex
+                obj.Init dsProductStatus, arrStatus, rowIndex
                 dictMap.Add strKey, obj
             Else
                 m_lngWarningCount = m_lngWarningCount + 1
@@ -202,14 +203,14 @@ Private Sub BuildHistoryCache()
     Dim dteMonth As Date
     
     For r = 2 To UBound(m_arrHistoryData, 1)
-        strKey = m_arrHistoryData(r, g_dsHistory.GetCol(FIELD_AFFILIATE)) & "|" & _
-                 m_arrHistoryData(r, g_dsHistory.GetCol(FIELD_CUSTOMER)) & "|" & _
-                 m_arrHistoryData(r, g_dsHistory.GetCol(FIELD_KEYFIGURE)) & "|" & _
-                 m_arrHistoryData(r, g_dsHistory.GetCol(FIELD_LOCALITEMNBR))
+        strKey = m_arrHistoryData(r, dsHistory.GetCol(FIELD_AFFILIATE)) & "|" & _
+                 m_arrHistoryData(r, dsHistory.GetCol(FIELD_CUSTOMER)) & "|" & _
+                 m_arrHistoryData(r, dsHistory.GetCol(FIELD_KEYFIGURE)) & "|" & _
+                 m_arrHistoryData(r, dsHistory.GetCol(FIELD_LOCALITEMNBR))
         
         If Not m_dictHistoryCache.Exists(strKey) Then
             Set dictMonthlyValues = CreateObject("Scripting.Dictionary")
-            For c = g_dsHistory.StartOfMonthsCol To UBound(m_arrHistoryData, 2)
+            For c = dsHistory.StartOfMonthsCol To UBound(m_arrHistoryData, 2)
                 dteMonth = TryParseDate(m_arrHistoryData(1, c))
                 If dteMonth > 0 Then
                     dictMonthlyValues.Add dteMonth, m_arrHistoryData(r, c)
@@ -229,17 +230,17 @@ Private Sub BuildDataCaches()
     Set m_dictHistSumCache = CreateObject("Scripting.Dictionary")
     m_dictHistSumCache.CompareMode = vbTextCompare
     For r = 2 To UBound(m_arrHistoryData, 1)
-        aff = m_arrHistoryData(r, g_dsHistory.GetCol(FIELD_AFFILIATE))
-        cust = m_arrHistoryData(r, g_dsHistory.GetCol(FIELD_CUSTOMER))
-        tier = m_arrHistoryData(r, g_dsHistory.GetCol(FIELD_TIER))
-        subTier = m_arrHistoryData(r, g_dsHistory.GetCol(FIELD_SUBTIER))
-        kf = m_arrHistoryData(r, g_dsHistory.GetCol(FIELD_KEYFIGURE))
+        aff = m_arrHistoryData(r, dsHistory.GetCol(FIELD_AFFILIATE))
+        cust = m_arrHistoryData(r, dsHistory.GetCol(FIELD_CUSTOMER))
+        tier = m_arrHistoryData(r, dsHistory.GetCol(FIELD_TIER))
+        subTier = m_arrHistoryData(r, dsHistory.GetCol(FIELD_SUBTIER))
+        kf = m_arrHistoryData(r, dsHistory.GetCol(FIELD_KEYFIGURE))
         
         strSubTierKey = aff & "|" & cust & "|" & subTier & "|" & tier & "|" & kf
         strTierKey = aff & "|" & cust & "|" & tier & "|" & kf
                  
         dblSum = 0
-        For c = g_dsHistory.StartOfMonthsCol To UBound(m_arrHistoryData, 2)
+        For c = dsHistory.StartOfMonthsCol To UBound(m_arrHistoryData, 2)
             If IsNumeric(m_arrHistoryData(r, c)) Then dblSum = dblSum + CDbl(m_arrHistoryData(r, c))
         Next c
         
@@ -251,12 +252,12 @@ Private Sub BuildDataCaches()
     Set m_dictDemandCache = CreateObject("Scripting.Dictionary")
     m_dictDemandCache.CompareMode = vbTextCompare
     For r = 2 To UBound(m_arrDemandData, 1)
-        aff = m_arrDemandData(r, g_dsDemand.GetCol(FIELD_AFFILIATE))
-        cust = m_arrDemandData(r, g_dsDemand.GetCol(FIELD_CUSTOMER))
-        tier = m_arrDemandData(r, g_dsDemand.GetCol(FIELD_TIER))
-        kf = m_arrDemandData(r, g_dsDemand.GetCol(FIELD_KEYFIGURE))
+        aff = m_arrDemandData(r, dsDemand.GetCol(FIELD_AFFILIATE))
+        cust = m_arrDemandData(r, dsDemand.GetCol(FIELD_CUSTOMER))
+        tier = m_arrDemandData(r, dsDemand.GetCol(FIELD_TIER))
+        kf = m_arrDemandData(r, dsDemand.GetCol(FIELD_KEYFIGURE))
         
-        For c = g_dsDemand.StartOfMonthsCol To UBound(m_arrDemandData, 2)
+        For c = dsDemand.StartOfMonthsCol To UBound(m_arrDemandData, 2)
             strDemandKey = aff & "|" & cust & "|" & tier & "|" & kf & "|" & CDate(m_arrDemandData(1, c))
             
             If IsNumeric(m_arrDemandData(r, c)) Then

@@ -6,18 +6,19 @@ Option Explicit
 ' Purpose:     Represents a single, generic item to be forecasted. This class is
 '              primarily a data container for an item's properties and its
 '              calculated forecast values.
-' Version:     3.1
+' Version:     3.2
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V3.1:        - REFACTOR: Replaced all hard-coded data field strings with the new public
-'                constants from mConfiguration.
+' V3.2:        - BUGFIX: Removed the unused m_Dimensions variable which was of type
+'                cDimensionKey, a class that has been made redundant and removed.
+'                This resolves the "User-defined type not defined" compile error.
+' V3.1:        - REFACTOR: Replaced all hard-coded data field strings with constants.
 ' V3.0:        - REFACTOR: Updated logic to use new explicit product statuses.
 '================================================================================================
 
 ' --- Private Member Variables ---
-Private m_Dimensions As cDimensionKey
 Private m_Properties As Object
 Private m_ForecastValues As Object
 
@@ -72,8 +73,6 @@ Public Property Get PhaseInPercent() As Double: PhaseInPercent = GetProp("PhaseI
 Public Property Get ForecastValues() As Object: Set ForecastValues = m_ForecastValues: End Property
 Public Property Set ForecastValues(ByVal Value As Object): Set m_ForecastValues = Value: End Property
 
-Public Property Get Dimensions() As cDimensionKey: Set Dimensions = m_Dimensions: End Property
-
 '@Ignore UnusedMember
 Public Property Get StatusString() As String
     StatusString = GetStatusString(Me.Status)
@@ -84,16 +83,12 @@ End Property
 '================================================================================================
 
 Private Sub Class_Initialize()
-    Set m_Dimensions = New cDimensionKey
     Set m_Properties = CreateObject("Scripting.Dictionary")
     m_Properties.CompareMode = vbTextCompare
     Set m_ForecastValues = CreateObject("Scripting.Dictionary")
 End Sub
 
 Public Sub Init(ByVal ds As cDataSource, ByVal arrDataSource As Variant, ByVal lngRow As Long)
-    m_Dimensions.Add FIELD_AFFILIATE, Trim$(arrDataSource(lngRow, ds.GetCol(FIELD_AFFILIATE)))
-    m_Dimensions.Add FIELD_ISD, Trim$(arrDataSource(lngRow, ds.GetCol(FIELD_ISD)))
-    
     AddProp FIELD_AFFILIATE, arrDataSource(lngRow, ds.GetCol(FIELD_AFFILIATE))
     AddProp FIELD_TIER, arrDataSource(lngRow, ds.GetCol(FIELD_TIER))
     AddProp FIELD_SUBTIER, arrDataSource(lngRow, ds.GetCol(FIELD_SUBTIER))

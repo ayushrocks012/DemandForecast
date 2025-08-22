@@ -6,20 +6,18 @@ Option Explicit
 ' Purpose:     This module defines all global constants and utility functions for the project.
 '              It acts as a central control panel for sheet names, column positions,
 '              and business logic enumerations.
-' Version:     40.1
+' Version:     40.2
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
+' V40.2:       - BUGFIX: Changed ProductStatus and logType Enums from 'Public' to 'Public'
+'                to make them globally available across the project, resolving a
+'                "User-defined type not defined" compile error in class modules.
 ' V40.1:       - REFACTOR: Replaced public global variables for data sources with private
 '                variables and public Property Get functions to improve encapsulation.
 '              - REFACTOR: Removed unused 'dummy' parameter from Init and Cleanup procedures.
 ' V40.0:       - REFACTOR: Added "Customer" dimension to Demand and History data sources.
-'              - REFACTOR: Updated column mappings to reflect new sheet layouts.
-'              - REFACTOR: Overhauled ProductStatus enum and mapping to match new business logic
-'                (ACTIVE, DISCONTINUED, PHASE OUT, PHASE IN, NOT APPLICABLE).
-' V39.0:       - BUGFIX: Moved GetStatusEnum, dictStatusMap, and InitializeStatusMap
-'                from the old mForecasting module to here.
 '================================================================================================
 
 ' --- DEBUGGING & LOGGING FLAGS ---

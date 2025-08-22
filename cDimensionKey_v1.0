@@ -1,0 +1,101 @@
+'@Folder("Classes")
+Option Explicit
+
+'================================================================================================
+' Class:       cDimensionKey
+' Purpose:     Represents a composite key made of multiple named dimensions. This class
+'              replaces hard-coded, pipe-delimited strings, allowing for flexible and
+'              scalable key management. It ensures that keys are always generated in a
+'              consistent, sorted order.
+' Version:     1.1
+' Author:      Ayush Goyal
+' Date:        08-Jul-2025
+'
+' Change Log:
+' V1.1:        - Applied Rubberduck code inspection fixes. Removed the unused
+'                'GetValue' function.
+' V1.0:        - Initial class creation for Stage 2 refactoring.
+'================================================================================================
+
+' --- Private Member Variables ---
+Private m_Dimensions As Object ' Dictionary: Key = Dimension Name, Item = Dimension Value
+Private Const SEPARATOR As String = "|"
+
+' --- Constructor ---
+Private Sub Class_Initialize()
+    Set m_Dimensions = CreateObject("Scripting.Dictionary")
+    m_Dimensions.CompareMode = vbTextCompare ' Case-insensitive dimension names
+End Sub
+
+' --- Public Methods ---
+
+'---------------------------------------------------------------------------------
+' Procedure : Add
+' Purpose   : Adds a new dimension (name/value pair) to the key.
+' @param   : Name As String - The name of the dimension (e.g., "Affiliate").
+' @param   : Value As Variant - The value of the dimension (e.g., "UK").
+'---------------------------------------------------------------------------------
+Public Sub Add(ByVal Name As String, ByVal Value As Variant)
+    If m_Dimensions.Exists(Name) Then
+        m_Dimensions.item(Name) = Value
+    Else
+        m_Dimensions.Add Name, Value
+    End If
+End Sub
+
+'---------------------------------------------------------------------------------
+' Procedure : ToString
+' Purpose   : Generates a consistent, repeatable string representation of the key.
+'             It sorts the dimension names alphabetically before joining them to
+'             ensure that the order of addition does not affect the final key string.
+'             (e.g., Key(A=1, B=2) and Key(B=2, A=1) produce the same string).
+' @return  : String - The generated composite key string.
+'---------------------------------------------------------------------------------
+Public Function ToString() As String
+    If m_Dimensions.Count = 0 Then
+        ToString = ""
+        Exit Function
+    End If
+    
+    Dim sortedKeys As Object
+    Set sortedKeys = GetSortedKeys()
+    
+    Dim keyParts() As String
+    ReDim keyParts(0 To sortedKeys.Count - 1)
+    
+    Dim i As Long
+    Dim dimName As Variant
+    
+    i = 0
+    For Each dimName In sortedKeys
+        keyParts(i) = Trim$(CStr(m_Dimensions.item(dimName)))
+        i = i + 1
+    Next dimName
+    
+    ToString = Join(keyParts, SEPARATOR)
+End Function
+
+' --- Private Helper Methods ---
+
+'---------------------------------------------------------------------------------
+' Procedure : GetSortedKeys
+' Purpose   : A private helper to get an alphabetically sorted collection of the
+'             dimension names (the dictionary keys).
+' @return  : Object - An ArrayList containing the sorted dimension names.
+'---------------------------------------------------------------------------------
+Private Function GetSortedKeys() As Object
+    ' System.Collections.ArrayList provides a convenient Sort method.
+    Set GetSortedKeys = CreateObject("System.Collections.ArrayList")
+    Dim keyName As Variant
+    
+    For Each keyName In m_Dimensions.Keys
+        GetSortedKeys.Add keyName
+    Next keyName
+    
+    GetSortedKeys.Sort
+End Function
+
+' --- Destructor ---
+Private Sub Class_Terminate()
+    Set m_Dimensions = Nothing
+End Sub

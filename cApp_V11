@@ -7,13 +7,15 @@ Option Explicit
 '              core components (DataManager, Engine, Reporter) and orchestrates the
 '              entire forecasting process from start to finish. This centralizes the
 '              application's logic and state.
-' Version:     1.2
+' Version:     1.3
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V1.2:        - REFACTOR: Removed all general-purpose helper functions and updated the
-'                class to call them from the new, centralized mUtilities module.
+' V1.3:        - BUGFIX: Removed the explicit "Me" keyword when calling private methods
+'                within the class to resolve a "Method or data member not found"
+'                compile error.
+' V1.2:        - REFACTOR: Removed helper functions to call them from mUtilities.
 ' V1.1:        - REFACTOR: Replaced hard-coded strings with constants.
 ' V1.0:        - Initial creation of the application controller class.
 '================================================================================================
@@ -37,7 +39,8 @@ Public Sub Run()
     Dim tStart As Double: tStart = Timer
     
     ' Initialize the application environment (Excel settings, log sheet, etc.)
-    If Not Me.InitializeRun() Then GoTo Main_Exit
+    ' BUGFIX: Call private methods directly without "Me"
+    If Not InitializeRun() Then GoTo Main_Exit
     
     ' --- Data Loading & Processing ---
     Set m_DataManager = New cDataManager
@@ -45,14 +48,16 @@ Public Sub Run()
     If Not m_DataManager.LoadAndProcessData() Then GoTo Main_Exit
     
     ' --- Main Calculation & Reporting Loop ---
-    Me.ProcessAllAffiliates
+    ' BUGFIX: Call private methods directly without "Me"
+    ProcessAllAffiliates
     
     ' Capture the final warning count from the data manager
     m_lngWarningCount = m_DataManager.WarningCount
     
 Main_Exit:
     ' Clean up and display the final status message
-    Me.FinalizeRun tStart
+    ' BUGFIX: Call private methods directly without "Me"
+    FinalizeRun tStart
 End Sub
 
 '================================================================================================
@@ -240,4 +245,3 @@ Private Sub Class_Terminate()
     Set m_wbHost = Nothing
     Set m_wsLog = Nothing
 End Sub
-

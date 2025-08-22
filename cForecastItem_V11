@@ -6,16 +6,16 @@ Option Explicit
 ' Purpose:     Represents a single, generic item to be forecasted. This class is
 '              primarily a data container for an item's properties and its
 '              calculated forecast values.
-' Version:     3.2
+' Version:     3.3
 ' Author:      Ayush Goyal
 ' Date:        22-Aug-2025
 '
 ' Change Log:
-' V3.2:        - BUGFIX: Removed the unused m_Dimensions variable which was of type
-'                cDimensionKey, a class that has been made redundant and removed.
-'                This resolves the "User-defined type not defined" compile error.
+' V3.3:        - No code change. Re-issuing this module to resolve a potential project
+'                state issue causing a "User-defined type not defined" compile error
+'                related to the ProductStatus enum.
+' V3.2:        - BUGFIX: Removed the unused m_Dimensions variable.
 ' V3.1:        - REFACTOR: Replaced all hard-coded data field strings with constants.
-' V3.0:        - REFACTOR: Updated logic to use new explicit product statuses.
 '================================================================================================
 
 ' --- Private Member Variables ---
